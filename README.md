@@ -2,7 +2,7 @@
 docker-compose up --build  
 # Register kong service and config route  
 bash kong/entrypoint.sh  
-# Htpp server run on port 81  
+# Htpp server run on port 80  
 curl http://0.0.0.0/api/v1
 See the console log  
 # Grpc server run on port 1020 concurrent  
