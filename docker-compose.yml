@@ -1,0 +1,156 @@
+version: '3'
+services:
+
+  #Flask App Container
+  flask:
+    build:
+      context: app
+      dockerfile: Dockerfile
+    image: fl/flask-app:3.6
+    restart: unless-stopped
+    tty: true
+    environment:
+      APP_ENV: "dev"
+      APP_DEBUG: "True"
+      APP_PORT: 5000
+    ports:
+      - "1020:1020"
+      - "5001:5000"
+    # depends_on:
+    #   - mongodb
+    networks:
+      - frontend
+      - backend
+
+
+  kong-database:
+    image: postgres:11.7
+    ports:
+      - 5433:5432
+    restart: always
+    volumes:
+      - kong-database:/var/lib/postgresql/data
+      # NOTE: ensure 'reader-analyze-postgres-data' is empty, if not,
+      # scripts in 'docker-entrypoint-initdb.d' below will not run
+      # - ./postgres/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend
+    environment:
+      - POSTGRES_USER=kong
+      - POSTGRES_DB=kong
+      - POSTGRES_PASSWORD=123456
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100M"
+        max-file: "3"
+  kong:
+    build:
+      context: .
+      dockerfile: kong/Dockerfile
+    image: leo/kong:0.1.0
+    depends_on:
+      - kong-database
+    ports:
+      - 80:8000
+      - 443:8443
+      - 8001:8001
+      # - 8444:8444
+    restart: always
+    networks:
+      - backend
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong-database
+      - KONG_PG_PASSWORD=123456
+      - KONG_LOG_LEVEL=info
+      - KONG_CUSTOM_PLUGINS=helloworld
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
+      - LOG_CHECK_CRON_SCHEDULE=0 11 * * *
+      - LOG_SIZE_MAX=1
+    volumes:
+      - ./kong/log:/tmp
+      # - ./kong/log:/var/log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100M"
+        max-file: "3"
+
+  kong-migrations:
+    image: leo/kong:0.1.0
+    command: kong migrations bootstrap
+    depends_on:
+      - kong-database
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong-database
+      - KONG_PG_PASSWORD=123456
+      - KONG_LOG_LEVEL=info
+      - KONG_CUSTOM_PLUGINS=helloworld
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
+
+    networks:
+      - backend
+    restart: on-failure
+
+  kong-migrations-up:
+    image: leo/kong:0.1.0
+    command: kong migrations up && kong migrations finish
+    depends_on:
+      - kong-database
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong-database
+      - KONG_PG_PASSWORD=123456
+      - KONG_LOG_LEVEL=info
+      - KONG_CUSTOM_PLUGINS=helloworld
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
+    networks:
+      - backend
+    restart: on-failure
+  konga:
+    image: leo/konga:1.0.0
+    build: ./konga
+    networks:
+      - backend
+    depends_on:
+        - konga-database
+    volumes:
+        - ./konga/user_seed.js:/app/user_seed.js:ro
+    ports:
+        - 1337:1337
+    environment:
+        DB_ADAPTER: mongo
+        DB_DATABASE: konga
+        DB_HOST: konga-database
+        KONGA_SEED_USER_DATA_SOURCE_FILE: /app/user_seed.js
+        NODE_ENV: production
+    restart: always
+  konga-database:
+      restart: always
+      image: mongo:4.1.5
+      volumes:
+          - konga_data:/data/db
+        # ports:
+        #     - 27017:27017
+      healthcheck:
+          test: echo 'db.stats().ok' | mongo localhost:27017/konga --quiet
+          interval: 10s
+          timeout: 5s
+          retries: 5
+      networks:
+          - backend
+#Docker Networks
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+#Volumes
+volumes:
+  appdata: {}
+  nginxdata: {}
+  kong-database: {}
+  konga_data: {}

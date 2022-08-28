@@ -1,0 +1,9 @@
+nginx_worker_processes = 10
+nginx_proxy_gzip = on
+nginx_proxy_gzip_comp_level = 6
+nginx_proxy_gzip_min_length = 512
+nginx_proxy_gzip_proxied = any
+nginx_proxy_gzip_vary = on
+nginx_proxy_gzip_http_version = 1.1
+nginx_proxy_gzip_buffers = 16 8k
+nginx_proxy_gzip_types = text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript application/vnd.ms-fontobject application/x-font-ttf font/opentype image/svg+xml image/x-icon
